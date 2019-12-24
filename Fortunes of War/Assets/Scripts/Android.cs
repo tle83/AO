@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
-using DataService;
 using Mono.Data.Sqlite;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -33,27 +32,29 @@ public class Android : MonoBehaviour {
             }
         }
 
-        connection = $"URI=File: {filepath}";
+        connection = $"URI=file:{filepath}";
         Debug.Log ($"Establishing connection to: {connection}");
         dbCon = new SqliteConnection (connection);
         dbCon.Open ();
 
-        string createTable = @"CREATE TABLE IF NOT EXIST \" + tableName + @" ( 
-                ID FLOAT(24) PRIMARY KEY NOT NULL,
+        string createTable = @"CREATE TABLE IF NOT EXISTS " + tableName + @" ( 
+                Id INT(24) PRIMARY KEY NOT NULL,
                 Name VARCHAR(255) NOT NULL,
                 AttackName VARCHAR(255) NOT NULL,
                 AttackInfo VARCHAR(1000) NOT NULL,
-                AttackDamage FLOAT(24) NOT NULL,
-                AttackRange FLOAT(24) NOT NULL,
+                AttackDamage INT(24) NOT NULL,
+                AttackRange INT(24) NOT NULL,
                 CrestName VARCHAR(255) NOT NULL,
                 CrestInfo VARCHAR(1000) NOT NULL,
-                CrestDamage FLOAT(24) NOT NULL,
+                CrestDamage INT(24) NOT NULL,
                 ClassType VARCHAR(255) NOT NULL,
                 PassiveName VARCHAR(255),
-                Health FLOAT(24) NOT NULL,
-                Movement FLOAT(24) NOT NULL,
-                Rate FLOAT(24) NOT NULL,
-                Tier VARCHAR(255) NOT NULL)";
+                Health INT(24) NOT NULL,
+                Movement INT(24) NOT NULL,
+                Rate DECIMAL (24, 6) NOT NULL,
+                Tier VARCHAR(255) NOT NULL,
+                Power INT(24) NOT NULL,
+                Multiplier DECIMAL(24, 6) NOT NULL)";
         try {
             // // create table
             dbCmd = dbCon.CreateCommand ();
@@ -67,16 +68,17 @@ public class Android : MonoBehaviour {
     }
 
     // Insert Function
-    public void insertData (string name, string atkName, string atkInfo, float atkDmg, float atkRange,
-        string crestName, string crestInfo, float crestDmg, string classType, string passiveName, float health, float movement, float rate, DataService.DataService.Tier tier) {
+    public void insertData (string name, string atkName, string atkInfo, int atkDmg, int atkRange,
+        string crestName, string crestInfo, int crestDmg, string classType, string passiveName,
+        int health, int movement, double rate, Service.Tier tier, double multiplier) {
         using (dbCon = new SqliteConnection (connection)) {
             dbCon.Open ();
             dbCmd = dbCon.CreateCommand ();
             string insertItem = @"INSERT INTO \" + tableName + @" 
             (Name, AttackName, AttackInfo, AttackDamage, AttackRange, 
-            CrestName, CrestInfo, CrestDamage, ClassType, PassiveName, Health, Movement) 
+            CrestName, CrestInfo, CrestDamage, ClassType, PassiveName, Health, Movement, Rate, Tier, Multiplier) 
             VALUES ({name}, {atkName}, {atkInfo}, {atkDmg}, {atkRange}, 
-            {crestName}, {crestInfo}, {crestDmg}, {classType}, {passiveName}, {health}, {movement}, {rate}, {tier})";
+            {crestName}, {crestInfo}, {crestDmg}, {classType}, {passiveName}, {health}, {movement}, {rate}, {tier}, {multiplier})";
             dbCmd.CommandText = insertItem;
             dbCmd.ExecuteScalar ();
             dbCon.Close ();
@@ -87,30 +89,34 @@ public class Android : MonoBehaviour {
 
     // Read Function
     public void readData () {
-        string name, atkName, atkInfo, crestName, crestInfo, classType, passiveName;
-        float id, atkDmg, atkRange, crestDmg, health, movement;
+        string name, atkName, atkInfo, crestName, crestInfo, classType, passiveName, tier;
+        int id, atkDmg, atkRange, crestDmg, health, movement;
+        double rate, multiplier;
         using (dbCon = new SqliteConnection (connection)) {
             dbCon.Open ();
             dbCmd = dbCon.CreateCommand ();
-            string readItem = $"";
+            string readItem = $"SELECT * FROM {tableName}";
             dbCmd.CommandText = readItem;
             dbReader = dbCmd.ExecuteReader ();
             while (dbReader.Read ()) {
-                id = dbReader.GetFloat (0);
-                name = dbReader.GetString (2);
-                atkName = dbReader.GetString (3);
-                atkInfo = dbReader.GetString (4);
-                atkDmg = dbReader.GetFloat (5);
-                atkRange = dbReader.GetFloat (6);
-                crestName = dbReader.GetString (7);
-                crestInfo = dbReader.GetString (8);
-                crestDmg = dbReader.GetFloat (9);
-                classType = dbReader.GetString (10);
-                passiveName = dbReader.GetString (11);
-                health = dbReader.GetFloat (12);
-                movement = dbReader.GetFloat (13);
+                id = dbReader.GetInt32 (0);
+                name = dbReader.GetString (1);
+                atkName = dbReader.GetString (2);
+                atkInfo = dbReader.GetString (3);
+                atkDmg = dbReader.GetInt32 (4);
+                atkRange = dbReader.GetInt32 (5);
+                crestName = dbReader.GetString (6);
+                crestInfo = dbReader.GetString (7);
+                crestDmg = dbReader.GetInt32 (8);
+                classType = dbReader.GetString (9);
+                passiveName = dbReader.IsDBNull (10) ? "" : dbReader.GetString (10);
+                health = dbReader.GetInt32 (11);
+                movement = dbReader.GetInt32 (12);
+                rate = dbReader.GetDouble (13);
+                tier = dbReader.GetString (14);
+                multiplier = dbReader.GetDouble (15);
 
-                dataMercs += $"{id}, {name}, \n{atkName}, {atkInfo}, {atkDmg}, {atkRange}, \n{crestName}, {crestInfo}, {crestDmg}, \n{classType}, \n{passiveName}, \n{health}, \n{movement}";
+                dataMercs += $"{id}, {name}, \n{atkName}, \n{atkInfo}, \n{atkDmg}, \n{atkRange}, \n{crestName}, \n{crestInfo}, \n{crestDmg}, \n{classType}, \n{passiveName}, \n{health}, \n{movement}, \n{rate}, \n{tier}, \n{multiplier}";
                 Debug.Log ($"Read Done: {dataMercs}");
             }
             dbReader.Close ();
@@ -121,32 +127,35 @@ public class Android : MonoBehaviour {
         }
     }
 
-    public void searchData (float ID) {
+    public void searchData (int ID) {
         using (dbCon = new SqliteConnection (connection)) {
-            string name, atkName, atkInfo, crestName, crestInfo, classType, passiveName;
-            float id, atkDmg, atkRange, crestDmg, health, movement;
+            string name, atkName, atkInfo, crestName, crestInfo, classType, passiveName, tier;
+            int id, atkDmg, atkRange, crestDmg, health, movement, rate, multiplier;
             dbCon.Open ();
             dbCmd = dbCon.CreateCommand ();
             string searchItem = @"SELECT Name, AttackName, AttackInfo, AttackDamage, AttackRange, 
-            CrestName, CrestInfo, CrestDamage, ClassType, PassiveName, Health, Movement FROM \" + tableName + @" where ID = \" + ID;
+            CrestName, CrestInfo, CrestDamage, ClassType, PassiveName, Health, Movement, Rate, Tier, Multiplier FROM \" + tableName + @" where ID = \" + ID;
             dbCmd.CommandText = searchItem;
             dbReader = dbCmd.ExecuteReader ();
             while (dbReader.Read ()) {
-                id = dbReader.GetFloat (0);
+                id = dbReader.GetInt32 (0);
                 name = dbReader.GetString (2);
                 atkName = dbReader.GetString (3);
                 atkInfo = dbReader.GetString (4);
-                atkDmg = dbReader.GetFloat (5);
-                atkRange = dbReader.GetFloat (6);
+                atkDmg = dbReader.GetInt32 (5);
+                atkRange = dbReader.GetInt32 (6);
                 crestName = dbReader.GetString (7);
                 crestInfo = dbReader.GetString (8);
-                crestDmg = dbReader.GetFloat (9);
+                crestDmg = dbReader.GetInt32 (9);
                 classType = dbReader.GetString (10);
                 passiveName = dbReader.GetString (11);
-                health = dbReader.GetFloat (12);
-                movement = dbReader.GetFloat (13);
+                health = dbReader.GetInt32 (12);
+                movement = dbReader.GetInt32 (13);
+                rate = dbReader.GetInt32 (14);
+                tier = dbReader.GetString (15);
+                multiplier = dbReader.GetInt32 (16);
 
-                dataMercs += $" { id }, { name }, \n { atkName }, { atkInfo }, { atkDmg }, { atkRange }, \n { crestName }, { crestInfo }, { crestDmg }, \n { classType }, \n { passiveName }, \n { health }, \n { movement }";
+                dataMercs += $"{id}, {name}, \n{atkName}, \n{atkInfo}, \n{atkDmg}, \n{atkRange}, \n{crestName}, \n{crestInfo}, \n{crestDmg}, \n{classType}, \n{passiveName}, \n{health}, \n{movement}, \n{rate}, \n{tier}, \n{multiplier}";
                 Debug.Log ($"Search Done: {dataMercs}");
             }
             dbReader.Close ();
@@ -157,12 +166,12 @@ public class Android : MonoBehaviour {
         }
     }
 
-    public void updateData (float id, string name, string atkName, string atkInfo, float atkDmg, float atkRange,
-        string crestName, string crestInfo, float crestDmg, string classType, string passiveName, float health, float movement) {
+    public void updateData (int id, string name, string atkName, string atkInfo, int atkDmg, int atkRange,
+        string crestName, string crestInfo, int crestDmg, string classType, string passiveName, int health, int movement, double rate, Service.Tier tier, double multiplier) {
         using (dbCon = new SqliteConnection (connection)) {
             dbCon.Open ();
             dbCmd = dbCon.CreateCommand ();
-            string updateItem = $"UPDATE { tableName } SET Name = { name }, AttackName = { atkName }, AttackInfo = { atkInfo }, AttackDamage = { atkDmg }, AttackRange = { atkRange }, CrestName = { crestName }, CrestInfo = { crestInfo }, CrestDamage = { crestDmg }, ClassType = { classType }, PassiveName = { passiveName }, Health = { health }, Movement = { movement } WHERE ID = { id }";
+            string updateItem = $"UPDATE { tableName } SET Name = { name }, AttackName = { atkName }, AttackInfo = { atkInfo }, AttackDamage = { atkDmg }, AttackRange = { atkRange }, CrestName = { crestName }, CrestInfo = { crestInfo }, CrestDamage = { crestDmg }, ClassType = { classType }, PassiveName = { passiveName }, Health = { health }, Movement = { movement }, Rate = {rate}, Tier = {tier}, Multiplier = {multiplier} WHERE ID = { id }";
             dbCmd.CommandText = updateItem;
             dbCmd.ExecuteScalar ();
             dbCon.Close ();
@@ -170,7 +179,7 @@ public class Android : MonoBehaviour {
         }
     }
 
-    public void deleteData (float id) {
+    public void deleteData (int id) {
         using (dbCon = new SqliteConnection (connection)) {
             dbCon.Open ();
             dbCmd = dbCon.CreateCommand ();
